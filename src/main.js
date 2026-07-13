@@ -179,11 +179,16 @@ function addStartLine() {
 
   const gantry = new THREE.Group();
   const dark = new THREE.MeshStandardMaterial({ color: 0x202326, metalness: .7, roughness: .35 });
-  const beam = new THREE.Mesh(new THREE.BoxGeometry(ROAD_WIDTH + 5, .5, .5), dark); beam.position.y = 6; gantry.add(beam);
-  for (const x of [-ROAD_WIDTH/2-2, ROAD_WIDTH/2+2]) { const post = new THREE.Mesh(new THREE.BoxGeometry(.45, 6, .45), dark); post.position.set(x, 3, 0); gantry.add(post); }
-  const sign = new THREE.Mesh(new THREE.BoxGeometry(7, 1.7, .28), new THREE.MeshStandardMaterial({ color: 0x17191b })); sign.position.set(0, 5.6, .05); gantry.add(sign);
-  const stripe = new THREE.Mesh(new THREE.BoxGeometry(6.4, .18, .3), new THREE.MeshBasicMaterial({ color: 0xef3e2f })); stripe.position.set(0, 5.05, .21); gantry.add(stripe);
-  gantry.position.copy(p); gantry.position.y += .1; gantry.rotation.y = Math.atan2(t.x, t.z); scene.add(gantry);
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(ROAD_WIDTH + 5, .4, .4), dark); beam.position.y = 7.2; gantry.add(beam);
+  for (const x of [-ROAD_WIDTH/2-2, ROAD_WIDTH/2+2]) { const post = new THREE.Mesh(new THREE.BoxGeometry(.4, 7.2, .4), dark); post.position.set(x, 3.6, 0); gantry.add(post); }
+  const bannerCanvas = document.createElement('canvas'); bannerCanvas.width = 1024; bannerCanvas.height = 180;
+  const bannerCtx = bannerCanvas.getContext('2d'); bannerCtx.fillStyle = '#17191b'; bannerCtx.fillRect(0, 0, bannerCanvas.width, bannerCanvas.height);
+  bannerCtx.fillStyle = '#ef3e2f'; bannerCtx.fillRect(0, 0, bannerCanvas.width, 15); bannerCtx.fillStyle = '#f4f4f0'; bannerCtx.font = '700 82px Arial';
+  bannerCtx.textAlign = 'center'; bannerCtx.textBaseline = 'middle'; bannerCtx.fillText('APEX CIRCUIT', bannerCanvas.width / 2, bannerCanvas.height / 2 + 5);
+  const bannerTexture = new THREE.CanvasTexture(bannerCanvas); bannerTexture.colorSpace = THREE.SRGBColorSpace; bannerTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(8.4, 1.48), new THREE.MeshBasicMaterial({ map: bannerTexture, side: THREE.DoubleSide })); sign.position.set(0, 6.45, .24); sign.rotation.y = Math.PI; gantry.add(sign);
+  const gantryIndex = 10, gantryPoint = centers[gantryIndex], gantryTangent = tangents[gantryIndex];
+  gantry.position.copy(gantryPoint); gantry.position.y += .1; gantry.rotation.y = Math.atan2(gantryTangent.x, gantryTangent.z); scene.add(gantry);
 }
 addStartLine();
 
