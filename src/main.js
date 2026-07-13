@@ -26,7 +26,8 @@ const ui = Object.fromEntries([
   'audio-button', 'finish-screen', 'restart-button', 'menu-button', 'result-title',
   'final-position', 'final-time', 'final-best', 'item-slot', 'item-icon', 'item-name',
   'item-icon-2', 'item-name-2', 'item-hint', 'effect-status', 'track-title',
-  'track-subtitle', 'track-eyebrow', 'track-selector', 'track-count'
+  'track-subtitle', 'track-eyebrow', 'track-selector', 'track-count', 'guide-button',
+  'guide-close', 'item-guide', 'item-guide-list'
 ].map(id => [id, document.getElementById(id)]));
 
 const scene = new THREE.Scene();
@@ -381,9 +382,16 @@ function createCar(color) {
     roughness: .16,
     clearcoat: 1,
     clearcoatRoughness: .055,
-    envMapIntensity: 1.55
+    envMapIntensity: 1.55,
+    transparent: true
   });
-  const carbon = new THREE.MeshStandardMaterial({ color: 0x07090a, roughness: .19, metalness: .8, envMapIntensity: 1.25 });
+  const carbon = new THREE.MeshStandardMaterial({
+    color: 0x07090a,
+    roughness: .19,
+    metalness: .8,
+    envMapIntensity: 1.25,
+    transparent: true
+  });
   const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x050606, roughness: .94, metalness: .03 });
   const rimMaterial = new THREE.MeshStandardMaterial({ color: 0xaeb4b8, roughness: .15, metalness: .97 });
   const brakeMaterial = new THREE.MeshStandardMaterial({ color: 0x3f4447, roughness: .35, metalness: .9 });
@@ -507,6 +515,21 @@ function createCar(color) {
   turboFlames.visible = false;
   car.add(turboFlames);
 
+  const magnetField = new THREE.Mesh(
+    new THREE.TorusGeometry(2.75, .045, 8, 64),
+    new THREE.MeshBasicMaterial({ color: 0xb96dff, transparent: true, opacity: .72, toneMapped: false, depthWrite: false })
+  );
+  magnetField.position.y = .12;
+  magnetField.rotation.x = Math.PI / 2;
+  magnetField.visible = false;
+  car.add(magnetField);
+
+  const ghostMaterials = [paint, carbon, glass];
+  ghostMaterials.forEach(material => {
+    material.userData.baseOpacity = material.opacity;
+    material.userData.baseDepthWrite = material.depthWrite;
+  });
+
   car.userData.body = bodyGroup;
   car.userData.wheels = wheelSpinners;
   car.userData.wheelPivots = wheelPivots;
@@ -515,6 +538,10 @@ function createCar(color) {
   car.userData.tailMaterial = tailMaterial;
   car.userData.shield = shield;
   car.userData.turboFlames = turboFlames;
+  car.userData.magnetField = magnetField;
+  car.userData.wing = wing;
+  car.userData.ghostMaterials = ghostMaterials;
+  car.userData.ghostActive = false;
   car.scale.setScalar(1.05);
   return car;
 }
@@ -537,7 +564,9 @@ const rivals = rivalColors.map((color, index) => ({
   progress: (TRACK_SAMPLES - 12 - index * 9) / TRACK_SAMPLES,
   speed: 42 + index * 1.2,
   lane: rivalLanes[index],
-  laps: 0
+  laps: 0,
+  slowUntil: 0,
+  slowFactor: 1
 }));
 rivals.forEach(rival => scene.add(rival.car));
 
@@ -549,10 +578,54 @@ terrainBelt.receiveShadow = true;
 scene.add(terrainBelt);
 
 const ITEM_TYPES = [
-  { id: 'turbo', name: 'TURBO', icon: 'N2O', color: '#30d5ff', duration: 4500 },
-  { id: 'shield', name: 'ESCUDO', icon: 'DEF', color: '#67f2ff', duration: 7000 },
-  { id: 'grip', name: 'AGARRE', icon: 'GRP', color: '#78e66d', duration: 8000 },
-  { id: 'pulse', name: 'PULSO', icon: 'EMP', color: '#ffca3a', duration: 5000 }
+  {
+    id: 'turbo', name: 'TURBO', icon: 'N2O', color: '#30d5ff', duration: 4500, category: 'VELOCIDAD',
+    description: 'Aumenta mucho la aceleracion y la velocidad maxima durante 4,5 segundos.'
+  },
+  {
+    id: 'shield', name: 'ESCUDO', icon: 'SHD', color: '#67f2ff', duration: 7000, category: 'DEFENSA',
+    description: 'Evita perder velocidad al golpear rivales o barreras durante 7 segundos.'
+  },
+  {
+    id: 'grip', name: 'AGARRE', icon: 'GRP', color: '#78e66d', duration: 8000, category: 'CONTROL',
+    description: 'Mejora la direccion y conserva mas velocidad fuera del asfalto durante 8 segundos.'
+  },
+  {
+    id: 'pulse', name: 'PULSO EMP', icon: 'EMP', color: '#ffca3a', duration: 5000, category: 'ATAQUE',
+    description: 'Reduce temporalmente la velocidad de todos los rivales durante 5 segundos.'
+  },
+  {
+    id: 'missile', name: 'MISIL', icon: 'RKT', color: '#ff5148', duration: 5000, category: 'ATAQUE',
+    description: 'Frena al rival mas cercano durante 5 segundos.'
+  },
+  {
+    id: 'magnet', name: 'IMAN', icon: 'MAG', color: '#c078ff', duration: 8000, category: 'TACTICA',
+    description: 'Atrae las cajas cercanas hacia el coche durante 8 segundos.'
+  },
+  {
+    id: 'overdrive', name: 'OVERDRIVE', icon: 'MAX', color: '#ff4fc8', duration: 6000, category: 'VELOCIDAD',
+    description: 'Combina turbo y agarre reforzado durante 6 segundos.'
+  },
+  {
+    id: 'repair', name: 'REPARACION', icon: 'FIX', color: '#a4ffb5', duration: 0, category: 'RECUPERACION',
+    description: 'Devuelve el coche a la pista, lo estabiliza y recupera velocidad al instante.'
+  },
+  {
+    id: 'oil', name: 'ACEITE', icon: 'OIL', color: '#f0a43c', duration: 16000, category: 'TRAMPA',
+    description: 'Deja una mancha detras; el primer rival que la pisa queda ralentizado.'
+  },
+  {
+    id: 'ghost', name: 'FASE', icon: 'GHO', color: '#d7c7ff', duration: 6000, category: 'DEFENSA',
+    description: 'Permite atravesar rivales y barreras sin colision durante 6 segundos.'
+  },
+  {
+    id: 'drs', name: 'DRS', icon: 'DRS', color: '#5e9cff', duration: 10000, category: 'VELOCIDAD',
+    description: 'Eleva la velocidad maxima sobre el asfalto durante 10 segundos.'
+  },
+  {
+    id: 'anchor', name: 'ANCLA', icon: 'ANC', color: '#ff8a45', duration: 7000, category: 'ATAQUE',
+    description: 'Reduce durante 7 segundos la velocidad del rival que lidera la carrera.'
+  }
 ];
 const MAX_INVENTORY = 2;
 const inventory = [];
@@ -560,6 +633,49 @@ let boostUntil = 0;
 let shieldUntil = 0;
 let gripUntil = 0;
 let pulseUntil = 0;
+let magnetUntil = 0;
+let ghostUntil = 0;
+let drsUntil = 0;
+let overdriveUntil = 0;
+
+function renderItemGuide() {
+  ui['item-guide-list'].replaceChildren();
+  ITEM_TYPES.forEach(item => {
+    const article = document.createElement('article');
+    article.className = 'guide-item';
+    article.style.setProperty('--item-color', item.color);
+
+    const icon = document.createElement('strong');
+    icon.className = 'guide-item-icon';
+    icon.textContent = item.icon;
+
+    const copy = document.createElement('div');
+    const category = document.createElement('span');
+    category.className = 'guide-item-category';
+    category.textContent = item.category;
+    const title = document.createElement('h3');
+    title.textContent = item.name;
+    const description = document.createElement('p');
+    description.textContent = item.description;
+    copy.append(category, title, description);
+    article.append(icon, copy);
+    ui['item-guide-list'].appendChild(article);
+  });
+}
+
+function openItemGuide() {
+  ui['item-guide'].classList.add('open');
+  ui['item-guide'].setAttribute('aria-hidden', 'false');
+  ui['guide-close'].focus();
+}
+
+function closeItemGuide() {
+  ui['item-guide'].classList.remove('open');
+  ui['item-guide'].setAttribute('aria-hidden', 'true');
+  ui['guide-button'].focus();
+}
+
+renderItemGuide();
 
 const pickupIconTexture = canvasTexture(128, (context, size) => {
   context.clearRect(0, 0, size, size);
@@ -601,10 +717,12 @@ function createPickup(trackIndex, lane) {
   pickup.add(shell, cage, core, icon);
   pickup.position.copy(centers[trackIndex]).addScaledVector(sides[trackIndex], lane);
   pickup.position.y += 1.18;
+  const homePosition = pickup.position.clone();
   pickup.userData = {
     trackIndex,
     lane,
     baseY: pickup.position.y,
+    homePosition,
     active: true,
     respawnAt: 0,
     shell,
@@ -636,13 +754,15 @@ function updateInventoryUI() {
     names[index].textContent = item?.name || 'VACIO';
     cell.classList.toggle('filled', Boolean(item));
     cell.style.setProperty('--slot-color', item?.color || '#596168');
+    cell.title = item?.description || 'Hueco de inventario vacio';
+    cell.setAttribute('aria-label', item ? `${item.name}: ${item.description}` : 'Hueco de inventario vacio');
   }
   ui['item-slot'].classList.toggle('empty', inventory.length === 0);
   ui['item-hint'].textContent = inventory.length === MAX_INVENTORY
     ? 'ESPACIO: USAR PRIMER OBJETO'
     : inventory.length
-      ? 'ESPACIO: USAR  ·  QUEDA UN HUECO'
-      : 'ATRAVIESA UNA CAJA';
+      ? 'ESPACIO: USAR / QUEDA UN HUECO'
+      : 'CAJA = OBJETO ALEATORIO';
 }
 
 function spawnPickupBurst(position, color) {
@@ -677,20 +797,162 @@ function collectPickup(pickup, now) {
   pickup.userData.respawnAt = now + 8500;
   spawnPickupBurst(pickup.position, item.color);
   updateInventoryUI();
-  showMessage(`OBJETO RECOGIDO  ·  ${item.name}`, 1350);
+  showMessage(`OBJETO ALEATORIO / ${item.name}`, 1350);
   audio.itemSfx(item.id);
+}
+
+const oilSlicks = [];
+
+function slowRival(rival, now, duration, factor) {
+  if (!rival) return;
+  rival.slowFactor = now < rival.slowUntil ? Math.min(rival.slowFactor, factor) : factor;
+  rival.slowUntil = Math.max(rival.slowUntil, now + duration);
+}
+
+function nearestRival() {
+  return rivals.reduce((nearest, rival) => (
+    !nearest || player.position.distanceToSquared(rival.car.position) < player.position.distanceToSquared(nearest.car.position)
+      ? rival
+      : nearest
+  ), null);
+}
+
+function leadingRival() {
+  return rivals.reduce((leader, rival) => {
+    const score = rival.laps + (rival.progress % 1);
+    const leaderScore = leader ? leader.laps + (leader.progress % 1) : -Infinity;
+    return score > leaderScore ? rival : leader;
+  }, null);
+}
+
+function removeOilSlick(index) {
+  const [slick] = oilSlicks.splice(index, 1);
+  if (!slick) return;
+  scene.remove(slick.group);
+  slick.group.traverse(child => {
+    if (child.geometry) child.geometry.dispose();
+    if (child.material) child.material.dispose();
+  });
+}
+
+function deployOil(now) {
+  const group = new THREE.Group();
+  const oil = new THREE.Mesh(
+    new THREE.CircleGeometry(2.2, 40),
+    new THREE.MeshPhysicalMaterial({
+      color: 0x08090a,
+      roughness: .08,
+      metalness: .18,
+      clearcoat: 1,
+      clearcoatRoughness: .04,
+      transparent: true,
+      opacity: .9
+    })
+  );
+  oil.rotation.x = -Math.PI / 2;
+  oil.scale.y = .62;
+  const sheen = new THREE.Mesh(
+    new THREE.RingGeometry(1.45, 2.05, 40),
+    new THREE.MeshBasicMaterial({ color: 0x8c5b9f, transparent: true, opacity: .22, side: THREE.DoubleSide, toneMapped: false })
+  );
+  sheen.rotation.x = -Math.PI / 2;
+  sheen.scale.y = .62;
+  sheen.position.y = .012;
+  group.add(oil, sheen);
+
+  const forward = new THREE.Vector3(-Math.sin(heading), 0, -Math.cos(heading));
+  group.position.copy(player.position).addScaledVector(forward, -3.7);
+  group.position.y = centers[playerIndex].y + .16;
+  scene.add(group);
+  oilSlicks.push({ group, armedAt: now + 450, expiresAt: now + 16000 });
+}
+
+function updateOilSlicks(now) {
+  for (let index = oilSlicks.length - 1; index >= 0; index--) {
+    const slick = oilSlicks[index];
+    slick.group.rotation.y += .004;
+    if (now >= slick.expiresAt) {
+      removeOilSlick(index);
+      continue;
+    }
+    if (now < slick.armedAt) continue;
+    const hitRival = rivals.find(rival => {
+      const dx = rival.car.position.x - slick.group.position.x;
+      const dz = rival.car.position.z - slick.group.position.z;
+      return Math.hypot(dx, dz) < 2.65;
+    });
+    if (!hitRival) continue;
+    slowRival(hitRival, now, 5200, .4);
+    spawnPickupBurst(slick.group.position, '#f0a43c');
+    audio.itemSfx('oil', true);
+    removeOilSlick(index);
+  }
 }
 
 function useHeldItem() {
   if (!inventory.length || state !== 'racing') return;
   const item = inventory.shift();
   const now = performance.now();
-  if (item.id === 'turbo') boostUntil = Math.max(boostUntil, now) + item.duration;
-  if (item.id === 'shield') shieldUntil = Math.max(shieldUntil, now) + item.duration;
-  if (item.id === 'grip') gripUntil = Math.max(gripUntil, now) + item.duration;
-  if (item.id === 'pulse') pulseUntil = Math.max(pulseUntil, now) + item.duration;
+  let activationMessage = `${item.name} ACTIVADO`;
+
+  switch (item.id) {
+    case 'turbo':
+      boostUntil = Math.max(boostUntil, now) + item.duration;
+      break;
+    case 'shield':
+      shieldUntil = Math.max(shieldUntil, now) + item.duration;
+      break;
+    case 'grip':
+      gripUntil = Math.max(gripUntil, now) + item.duration;
+      break;
+    case 'pulse':
+      pulseUntil = Math.max(pulseUntil, now) + item.duration;
+      spawnPickupBurst(player.position, item.color);
+      break;
+    case 'missile': {
+      const target = nearestRival();
+      slowRival(target, now, item.duration, .42);
+      if (target) spawnPickupBurst(target.car.position, item.color);
+      activationMessage = 'MISIL / RIVAL MAS CERCANO ALCANZADO';
+      break;
+    }
+    case 'magnet':
+      magnetUntil = Math.max(magnetUntil, now) + item.duration;
+      break;
+    case 'overdrive':
+      overdriveUntil = Math.max(overdriveUntil, now) + item.duration;
+      boostUntil = Math.max(boostUntil, overdriveUntil);
+      gripUntil = Math.max(gripUntil, overdriveUntil);
+      break;
+    case 'repair': {
+      const restoredSpeed = Math.max(38, Math.abs(speed));
+      resetToTrack();
+      speed = restoredSpeed;
+      cameraShake = 0;
+      spawnPickupBurst(player.position, item.color);
+      activationMessage = 'REPARACION / COCHE ESTABILIZADO';
+      break;
+    }
+    case 'oil':
+      deployOil(now);
+      activationMessage = 'ACEITE DESPLEGADO';
+      break;
+    case 'ghost':
+      ghostUntil = Math.max(ghostUntil, now) + item.duration;
+      break;
+    case 'drs':
+      drsUntil = Math.max(drsUntil, now) + item.duration;
+      break;
+    case 'anchor': {
+      const target = leadingRival();
+      slowRival(target, now, item.duration, .48);
+      if (target) spawnPickupBurst(target.car.position, item.color);
+      activationMessage = 'ANCLA / LIDER RALENTIZADO';
+      break;
+    }
+  }
   updateInventoryUI();
-  showMessage(`${item.name} ACTIVADO`, 1400);
+  showMessage(activationMessage, 1500);
   audio.itemSfx(item.id, true);
 }
 
@@ -712,15 +974,30 @@ function updatePickups(dt, now, frameStart) {
       pickup.userData.active = true;
       pickup.visible = true;
       pickup.scale.setScalar(1);
+      pickup.position.copy(pickup.userData.homePosition);
     }
     if (!pickup.userData.active) continue;
     pickup.rotation.y += dt * .82;
     pickup.userData.cage.rotation.x += dt * .45;
     pickup.userData.core.rotation.x += dt * 1.2;
     pickup.userData.core.rotation.z += dt * .9;
+    const magnetActive = state === 'racing' && now < magnetUntil && inventory.length < MAX_INVENTORY;
+    const dx = player.position.x - pickup.position.x;
+    const dz = player.position.z - pickup.position.z;
+    const distanceToPlayer = Math.hypot(dx, dz);
+    if (magnetActive && distanceToPlayer < 17) {
+      const pull = 1 - Math.exp(-8.5 * dt);
+      pickup.position.x = THREE.MathUtils.lerp(pickup.position.x, player.position.x, pull);
+      pickup.position.z = THREE.MathUtils.lerp(pickup.position.z, player.position.z, pull);
+    } else {
+      const settle = 1 - Math.exp(-4 * dt);
+      pickup.position.x = THREE.MathUtils.lerp(pickup.position.x, pickup.userData.homePosition.x, settle);
+      pickup.position.z = THREE.MathUtils.lerp(pickup.position.z, pickup.userData.homePosition.z, settle);
+    }
     pickup.position.y = pickup.userData.baseY + Math.sin(now * .0025 + pickup.userData.trackIndex) * .16;
     const collisionDistance = distancePointToSegmentXZ(pickup.position, frameStart, player.position);
-    if (state === 'racing' && inventory.length < MAX_INVENTORY && collisionDistance < 3.25) collectPickup(pickup, now);
+    const collectionRadius = magnetActive ? 6.2 : 3.25;
+    if (state === 'racing' && inventory.length < MAX_INVENTORY && collisionDistance < collectionRadius) collectPickup(pickup, now);
   }
 
   for (let index = pickupEffects.length - 1; index >= 0; index--) {
@@ -752,15 +1029,37 @@ function updatePickups(dt, now, frameStart) {
 
 function updateActiveEffects(now) {
   const active = [];
-  if (now < boostUntil) active.push(`TURBO ${((boostUntil - now) / 1000).toFixed(1)}s`);
+  const overdriveActive = now < overdriveUntil;
+  if (overdriveActive) active.push(`OVERDRIVE ${((overdriveUntil - now) / 1000).toFixed(1)}s`);
+  if (now < boostUntil && !overdriveActive) active.push(`TURBO ${((boostUntil - now) / 1000).toFixed(1)}s`);
   if (now < shieldUntil) active.push(`ESCUDO ${((shieldUntil - now) / 1000).toFixed(1)}s`);
-  if (now < gripUntil) active.push(`AGARRE ${((gripUntil - now) / 1000).toFixed(1)}s`);
+  if (now < gripUntil && !overdriveActive) active.push(`AGARRE ${((gripUntil - now) / 1000).toFixed(1)}s`);
   if (now < pulseUntil) active.push(`PULSO ${((pulseUntil - now) / 1000).toFixed(1)}s`);
-  ui['effect-status'].textContent = active.join('  ·  ');
+  if (now < magnetUntil) active.push(`IMAN ${((magnetUntil - now) / 1000).toFixed(1)}s`);
+  if (now < ghostUntil) active.push(`FASE ${((ghostUntil - now) / 1000).toFixed(1)}s`);
+  if (now < drsUntil) active.push(`DRS ${((drsUntil - now) / 1000).toFixed(1)}s`);
+  ui['effect-status'].textContent = active.join(' / ');
   player.userData.shield.visible = now < shieldUntil;
   player.userData.turboFlames.visible = now < boostUntil;
+  player.userData.magnetField.visible = now < magnetUntil;
   if (player.userData.shield.visible) player.userData.shield.rotation.y += .028;
   if (player.userData.turboFlames.visible) player.userData.turboFlames.scale.z = .86 + Math.random() * .3;
+  if (player.userData.magnetField.visible) {
+    player.userData.magnetField.rotation.z += .035;
+    player.userData.magnetField.scale.setScalar(.95 + Math.sin(now * .008) * .06);
+  }
+
+  const ghostActive = now < ghostUntil;
+  if (ghostActive !== player.userData.ghostActive) {
+    player.userData.ghostActive = ghostActive;
+    player.userData.ghostMaterials.forEach(material => {
+      material.opacity = ghostActive ? material.userData.baseOpacity * .3 : material.userData.baseOpacity;
+      material.depthWrite = ghostActive ? false : material.userData.baseDepthWrite;
+      material.needsUpdate = true;
+    });
+  }
+  const wingTarget = now < drsUntil ? -.2 : 0;
+  player.userData.wing.rotation.x = THREE.MathUtils.lerp(player.userData.wing.rotation.x, wingTarget, .12);
 }
 
 const environmentGroup = new THREE.Group();
@@ -1043,7 +1342,8 @@ function resetRace() {
   previousIndex = playerIndex;
   bestLap = Infinity;
   inventory.length = 0;
-  boostUntil = shieldUntil = gripUntil = pulseUntil = 0;
+  boostUntil = shieldUntil = gripUntil = pulseUntil = magnetUntil = ghostUntil = drsUntil = overdriveUntil = 0;
+  while (oilSlicks.length) removeOilSlick(oilSlicks.length - 1);
   updateInventoryUI();
   ui['effect-status'].textContent = '';
   pickups.forEach(pickup => {
@@ -1051,11 +1351,20 @@ function resetRace() {
     pickup.userData.respawnAt = 0;
     pickup.visible = true;
     pickup.scale.setScalar(1);
+    pickup.position.copy(pickup.userData.homePosition);
   });
   player.userData.body.rotation.set(0, 0, 0);
   player.userData.body.position.y = 0;
   player.userData.shield.visible = false;
   player.userData.turboFlames.visible = false;
+  player.userData.magnetField.visible = false;
+  player.userData.wing.rotation.x = 0;
+  player.userData.ghostActive = false;
+  player.userData.ghostMaterials.forEach(material => {
+    material.opacity = material.userData.baseOpacity;
+    material.depthWrite = material.userData.baseDepthWrite;
+    material.needsUpdate = true;
+  });
   player.userData.tailMaterial.emissiveIntensity = 2.8;
   const point = centers[playerIndex];
   const tangent = tangents[playerIndex];
@@ -1068,6 +1377,8 @@ function resetRace() {
   rivals.forEach((rival, index) => {
     rival.progress = (TRACK_SAMPLES - 12 - index * 9) / TRACK_SAMPLES;
     rival.laps = 0;
+    rival.slowUntil = 0;
+    rival.slowFactor = 1;
     placeCarOnTrack(rival.car, rival.progress, rival.lane);
   });
   ui.lap.textContent = `1 / ${TOTAL_LAPS}`;
@@ -1143,12 +1454,14 @@ function updatePlayer(dt, now) {
   const isBoosting = now < boostUntil;
   const isShielded = now < shieldUntil;
   const hasGripPower = now < gripUntil;
+  const isGhosted = now < ghostUntil;
+  const isDrsActive = now < drsUntil;
   const [nearIndex, centerDistance] = nearestTrackIndex(player.position);
   previousIndex = playerIndex;
   playerIndex = nearIndex;
   const onRoad = centerDistance < ROAD_WIDTH / 2 + .65;
   const surfaceGrip = hasGripPower ? 1.12 : CURRENT_TRACK.roadStyle === 'wet' ? .86 : CURRENT_TRACK.roadStyle === 'cold' ? .82 : CURRENT_TRACK.roadStyle === 'dusty' ? .93 : 1;
-  const maxSpeed = isBoosting ? 96 : onRoad ? 78 : hasGripPower ? 54 : 31;
+  const maxSpeed = isBoosting ? 96 : isDrsActive && onRoad ? 88 : onRoad ? 78 : hasGripPower ? 54 : 31;
   const acceleration = 21 + (isBoosting ? 23 : 0);
 
   if (accelerating) speed += acceleration * (1 - Math.abs(speed) / 106) * dt;
@@ -1200,7 +1513,7 @@ function updatePlayer(dt, now) {
   player.userData.tailMaterial.emissiveIntensity = braking && speed > 2 ? 7.5 : 2.8;
 
   const lateralOffset = player.position.clone().sub(centers[playerIndex]).dot(sides[playerIndex]);
-  if (Math.abs(lateralOffset) > BARRIER_DRIVE_LIMIT) {
+  if (!isGhosted && Math.abs(lateralOffset) > BARRIER_DRIVE_LIMIT) {
     const penetration = Math.abs(lateralOffset) - BARRIER_DRIVE_LIMIT;
     player.position.addScaledVector(sides[playerIndex], -Math.sign(lateralOffset) * penetration);
     if (Math.abs(speed) > 8 && !isShielded) {
@@ -1210,16 +1523,18 @@ function updatePlayer(dt, now) {
     }
   }
 
-  for (const rival of rivals) {
-    const distance = player.position.distanceTo(rival.car.position);
-    if (distance < 2.5) {
-      const push = player.position.clone().sub(rival.car.position).setY(0);
-      if (push.lengthSq() < .0001) push.set(1, 0, 0);
-      push.normalize();
-      player.position.addScaledVector(push, (2.5 - distance) * .62);
-      if (!isShielded) {
-        speed *= .86;
-        cameraShake = .16;
+  if (!isGhosted) {
+    for (const rival of rivals) {
+      const distance = player.position.distanceTo(rival.car.position);
+      if (distance < 2.5) {
+        const push = player.position.clone().sub(rival.car.position).setY(0);
+        if (push.lengthSq() < .0001) push.set(1, 0, 0);
+        push.normalize();
+        player.position.addScaledVector(push, (2.5 - distance) * .62);
+        if (!isShielded) {
+          speed *= .86;
+          cameraShake = .16;
+        }
       }
     }
   }
@@ -1253,7 +1568,8 @@ function updateRivals(dt) {
   const pulseFactor = now < pulseUntil ? .64 : 1;
   rivals.forEach((rival, index) => {
     const oldProgress = rival.progress;
-    const targetSpeed = (rival.speed + Math.sin(now * .0007 + index) * 2.2) * pulseFactor;
+    if (now >= rival.slowUntil) rival.slowFactor = 1;
+    const targetSpeed = (rival.speed + Math.sin(now * .0007 + index) * 2.2) * pulseFactor * rival.slowFactor;
     rival.progress += targetSpeed * dt / trackLength;
     if (Math.floor(oldProgress) < Math.floor(rival.progress)) rival.laps++;
     const laneMovement = Math.sin(rival.progress * 48 + index * 1.7) * .18;
@@ -1269,6 +1585,7 @@ function updateRivals(dt) {
       .07
     );
     rival.car.userData.body.position.y = Math.sin(now * .011 + index) * .007;
+    rival.car.userData.tailMaterial.emissiveIntensity = now < rival.slowUntil || now < pulseUntil ? 7.2 : 2.8;
   });
 }
 
@@ -1413,6 +1730,7 @@ function animate(now = performance.now()) {
   }
 
   updatePickups(dt, now, playerFrameStart);
+  updateOilSlicks(now);
   updateActiveEffects(now);
   composer.render();
 }
@@ -1421,8 +1739,18 @@ ui['start-button'].addEventListener('click', startRace);
 ui['restart-button'].addEventListener('click', startRace);
 ui['menu-button'].addEventListener('click', returnToMenu);
 ui['audio-button'].addEventListener('click', toggleAllAudio);
+ui['guide-button'].addEventListener('click', openItemGuide);
+ui['guide-close'].addEventListener('click', closeItemGuide);
+ui['item-guide'].addEventListener('click', event => {
+  if (event.target === ui['item-guide']) closeItemGuide();
+});
 
 addEventListener('keydown', event => {
+  if (ui['item-guide'].classList.contains('open')) {
+    if (event.code === 'Escape') closeItemGuide();
+    event.preventDefault();
+    return;
+  }
   keys[event.code] = true;
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) event.preventDefault();
   if (event.code === 'KeyR' && state !== 'menu') resetToTrack();

@@ -16,13 +16,19 @@
         <h1 id="track-title">Arena Rojiblanca</h1>
         <p id="track-subtitle" class="subtitle">3 vueltas &middot; 5 pilotos &middot; Circuito de estadio</p>
         <div class="car-line"><span class="car-swatch"></span> AXR GT3 <strong>#27</strong></div>
-        <button id="start-button"><span>INICIAR CARRERA</span><small>ENTER</small></button>
+        <div class="object-key-hint">
+          <kbd>ESPACIO</kbd>
+          <span><strong>USAR OBJETO</strong>La misma tecla para todos</span>
+        </div>
+        <div class="start-actions">
+          <button id="start-button"><span>INICIAR CARRERA</span><small>ENTER</small></button>
+          <button id="guide-button"><span>GU&Iacute;A DE OBJETOS</span><small>12 OBJETOS</small></button>
+        </div>
         <div class="controls">
           <div><kbd>W</kbd><kbd>S</kbd><span>Acelerar / frenar</span></div>
           <div><kbd>A</kbd><kbd>D</kbd><span>Direcci&oacute;n</span></div>
           <div><kbd>R</kbd><span>Volver a pista</span></div>
           <div><kbd>M</kbd><span>Sonido</span></div>
-          <div><kbd>ESPACIO</kbd><span>Usar objeto</span></div>
         </div>
       </div>
 
@@ -31,6 +37,23 @@
         <div id="track-selector"></div>
       </section>
       <p class="footer-note">Control de estabilidad &middot; Camara dinamica &middot; Graficos de alto rendimiento</p>
+    </div>
+
+    <div id="item-guide" class="item-guide" aria-hidden="true">
+      <section class="item-guide-panel" role="dialog" aria-modal="true" aria-labelledby="item-guide-title">
+        <header class="item-guide-header">
+          <div>
+            <p class="eyebrow">MANUAL DEL PILOTO</p>
+            <h2 id="item-guide-title">Gu&iacute;a de objetos</h2>
+          </div>
+          <button id="guide-close" type="button" aria-label="Cerrar gu&iacute;a" title="Cerrar">&times;</button>
+        </header>
+        <div class="guide-use-key">
+          <kbd>ESPACIO</kbd>
+          <span><strong>UNA SOLA TECLA</strong>Activa el primer objeto del inventario</span>
+        </div>
+        <div id="item-guide-list" class="item-guide-list"></div>
+      </section>
     </div>
 
     <div id="hud" class="hidden">

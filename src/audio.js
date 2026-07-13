@@ -209,7 +209,20 @@ export class ModernRaceAudio {
 
   itemSfx(id, activate = false) {
     if (!this.ctx || this.muted) return;
-    const notes = { turbo: [260, 420, 680], shield: [520, 660, 820], grip: [300, 380, 470], pulse: [740, 430, 260] }[id] || [360, 520];
+    const notes = {
+      turbo: [260, 420, 680],
+      shield: [520, 660, 820],
+      grip: [300, 380, 470],
+      pulse: [740, 430, 260],
+      missile: [180, 260, 620],
+      magnet: [330, 495, 660],
+      overdrive: [220, 440, 660, 880],
+      repair: [392, 523, 659],
+      oil: [190, 150, 120],
+      ghost: [760, 640, 880],
+      drs: [310, 520, 780],
+      anchor: [260, 196, 147]
+    }[id] || [360, 520];
     notes.forEach((frequency, index) => {
       this.scheduleTone({
         frequency,
