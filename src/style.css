@@ -1,0 +1,99 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  font-family: Inter, Arial, sans-serif;
+  color: #f4f6f7;
+  background: #080a0d;
+  font-synthesis: none;
+}
+
+* { box-sizing: border-box; }
+html, body, #game { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+canvas { display: block; }
+
+.screen {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: none;
+  background: linear-gradient(90deg, rgba(5, 7, 9, .94) 0%, rgba(5, 7, 9, .72) 34%, rgba(5, 7, 9, .08) 68%);
+}
+.screen.active { display: block; }
+.screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent 0, transparent 3px, rgba(255,255,255,.015) 4px);
+}
+
+.brand {
+  position: absolute;
+  top: 42px;
+  left: 52px;
+  font: 700 24px/1 'Barlow Condensed', sans-serif;
+  letter-spacing: 2px;
+  z-index: 1;
+}
+.brand span { color: #ef3e2f; font-weight: 800; }
+.start-panel, .result-panel { position: absolute; left: 8vw; top: 50%; transform: translateY(-48%); z-index: 1; }
+.eyebrow { color: #ef3e2f; font-size: 12px; font-weight: 700; letter-spacing: 2.5px; margin: 0 0 8px; }
+h1, h2 { font: 800 clamp(58px, 8vw, 112px)/.86 'Barlow Condensed', sans-serif; letter-spacing: 0; text-transform: uppercase; margin: 0; }
+.subtitle { color: #a7adb3; margin: 20px 0 32px; font-size: 14px; }
+.car-line { border-left: 3px solid #ef3e2f; padding: 11px 14px; margin-bottom: 30px; font: 600 16px 'Barlow Condensed'; background: rgba(255,255,255,.05); width: 300px; }
+.car-line strong { float: right; color: #a7adb3; }
+.car-swatch { display: inline-block; width: 24px; height: 8px; margin-right: 12px; background: #e3261f; }
+button { border: 0; color: #fff; font: 700 13px Inter, sans-serif; cursor: pointer; }
+#start-button, #restart-button { width: 300px; height: 54px; padding: 0 18px; display: flex; align-items: center; justify-content: space-between; background: #e73528; border-bottom: 3px solid #921c15; }
+button:hover { filter: brightness(1.14); }
+button small { color: rgba(255,255,255,.65); font-size: 10px; }
+.controls { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; width: 390px; margin-top: 28px; color: #899097; font-size: 11px; }
+.controls div { display: flex; align-items: center; gap: 5px; }
+.controls span { margin-left: 5px; }
+kbd { min-width: 24px; height: 24px; display: inline-grid; place-items: center; border: 1px solid #525960; background: #24282d; color: #eee; font: 600 10px Inter; box-shadow: 0 2px 0 #111; }
+.footer-note { position: absolute; left: 52px; bottom: 30px; color: #646a71; font-size: 10px; letter-spacing: 1px; }
+
+.hidden { display: none !important; }
+#hud { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
+.topbar { position: absolute; top: 22px; left: 26px; display: flex; height: 57px; background: rgba(7,9,11,.72); border-top: 2px solid #ef3e2f; backdrop-filter: blur(8px); }
+.topbar > div { min-width: 118px; padding: 9px 16px; border-right: 1px solid rgba(255,255,255,.1); display: flex; flex-direction: column; }
+.topbar span, .topbar small { font: 600 9px Inter; color: #889097; letter-spacing: 1px; }
+.topbar strong { font: 600 18px 'Barlow Condensed'; }
+.race-position { position: relative; min-width: 86px !important; flex-direction: row !important; align-items: baseline; }
+.race-position strong { font-size: 34px; line-height: 34px; }
+.race-position > span { font-size: 15px; margin-left: 3px; }
+.race-position small { position: absolute; bottom: 5px; left: 17px; }
+
+#countdown { position: absolute; inset: 0; display: grid; place-items: center; font: 800 min(22vw, 220px)/1 'Barlow Condensed'; text-shadow: 0 8px 30px #000; color: #fff; }
+#countdown.go { color: #ef3e2f; }
+#message { position: absolute; top: 16%; width: 100%; text-align: center; font: 700 17px 'Barlow Condensed'; letter-spacing: 2px; color: #ffca3a; text-shadow: 0 2px 5px #000; }
+#minimap { position: absolute; right: 24px; top: 24px; width: 220px; height: 180px; }
+.telemetry { position: absolute; right: 32px; bottom: 28px; width: 240px; height: 108px; background: rgba(7,9,11,.74); border-right: 3px solid #ef3e2f; backdrop-filter: blur(8px); }
+.gear { position: absolute; left: 14px; top: 14px; width: 48px; height: 60px; display: grid; place-items: center; border-right: 1px solid #4a4f54; font: 700 45px 'Barlow Condensed'; color: #ef3e2f; }
+.speed { position: absolute; right: 15px; top: 9px; text-align: right; }
+.speed strong { display: block; font: 700 55px/.9 'Barlow Condensed'; }
+.speed span { font-size: 9px; color: #8d9399; letter-spacing: 1px; }
+.rpm { position: absolute; left: 14px; right: 14px; height: 4px; bottom: 14px; background: #34383c; }
+.rpm i { display: block; width: 0; height: 100%; background: linear-gradient(90deg, #e8e8e8 0%, #ffca3a 72%, #ef3e2f 100%); transition: width .08s; }
+.assist { position: absolute; left: 17px; bottom: 24px; font-size: 8px; color: #7ce080; letter-spacing: 1px; }
+#audio-button { pointer-events: auto; position: absolute; left: 27px; bottom: 28px; width: 36px; height: 36px; background: rgba(7,9,11,.75); border: 1px solid #555; color: #65d17a; font-size: 12px; }
+#audio-button.muted { color: #ef3e2f; }
+
+#finish-screen { background: rgba(5,7,9,.88); }
+.result-panel { width: min(500px, 85vw); }
+.result-panel h2 { font-size: clamp(70px, 9vw, 118px); margin-bottom: 28px; }
+.result-position { position: absolute; left: 350px; top: 5px; display: flex; flex-direction: column; color: #ef3e2f; }
+.result-position strong { font: 800 72px/.9 'Barlow Condensed'; }
+.result-position span { font-size: 8px; color: #999; letter-spacing: 1px; }
+.result-times { display: flex; width: 430px; border-top: 1px solid #444; margin-bottom: 30px; }
+.result-times div { flex: 1; padding: 15px 15px 15px 0; display: flex; flex-direction: column; }
+.result-times span { color: #777f86; font-size: 10px; text-transform: uppercase; }
+.result-times strong { font: 600 21px 'Barlow Condensed'; }
+
+@media (max-width: 800px) {
+  .brand { left: 25px; top: 25px; }
+  .start-panel { left: 25px; }
+  .controls { width: 340px; }
+  .best { display: none !important; }
+  #minimap { transform: scale(.72); transform-origin: top right; }
+}
