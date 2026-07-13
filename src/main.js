@@ -96,7 +96,14 @@ const trackPoints = [
   [-142, 3, 68], [-182, 1, 4], [-157, 0, -63], [-102, 0, -115]
 ].map(([x, y, z]) => new THREE.Vector3(x, y, z));
 const trackCurve = new THREE.CatmullRomCurve3(trackPoints, true, 'centripetal', .42);
-const centers = Array.from({ length: TRACK_SAMPLES }, (_, i) => trackCurve.getPointAt(i / TRACK_SAMPLES));
+
+function getTrackPoint(u) {
+  const point = trackCurve.getPointAt(u);
+  point.y = Math.max(.05, point.y);
+  return point;
+}
+
+const centers = Array.from({ length: TRACK_SAMPLES }, (_, i) => getTrackPoint(i / TRACK_SAMPLES));
 const tangents = Array.from({ length: TRACK_SAMPLES }, (_, i) => trackCurve.getTangentAt(i / TRACK_SAMPLES).normalize());
 const sides = tangents.map(t => new THREE.Vector3().crossVectors(UP, t).normalize());
 
@@ -104,7 +111,7 @@ function ribbonGeometry(width, yOffset = 0, uvRepeat = 1) {
   const positions = [], uvs = [], indices = [];
   for (let i = 0; i <= TRACK_SAMPLES; i++) {
     const u = i / TRACK_SAMPLES;
-    const p = trackCurve.getPointAt(u);
+    const p = getTrackPoint(u);
     const tangent = trackCurve.getTangentAt(u).normalize();
     const side = new THREE.Vector3().crossVectors(UP, tangent).normalize();
     for (const sign of [-1, 1]) {
