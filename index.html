@@ -12,20 +12,25 @@
     <div id="start-screen" class="screen active">
       <div class="brand"><span>APEX</span> CIRCUIT</div>
       <div class="start-panel">
-        <p class="eyebrow">SERIE GT · RONDA 04</p>
-        <h1>Silver Ridge</h1>
-        <p class="subtitle">3 vueltas · 5 pilotos · Asfalto seco</p>
+        <p id="track-eyebrow" class="eyebrow">CAMPEONATO GT</p>
+        <h1 id="track-title">Arena Rojiblanca</h1>
+        <p id="track-subtitle" class="subtitle">3 vueltas &middot; 5 pilotos &middot; Circuito de estadio</p>
         <div class="car-line"><span class="car-swatch"></span> AXR GT3 <strong>#27</strong></div>
         <button id="start-button"><span>INICIAR CARRERA</span><small>ENTER</small></button>
         <div class="controls">
           <div><kbd>W</kbd><kbd>S</kbd><span>Acelerar / frenar</span></div>
-          <div><kbd>A</kbd><kbd>D</kbd><span>Dirección</span></div>
+          <div><kbd>A</kbd><kbd>D</kbd><span>Direcci&oacute;n</span></div>
           <div><kbd>R</kbd><span>Volver a pista</span></div>
           <div><kbd>M</kbd><span>Sonido</span></div>
           <div><kbd>ESPACIO</kbd><span>Usar objeto</span></div>
         </div>
       </div>
-      <p class="footer-note">Conducción asistida · Cámara dinámica</p>
+
+      <section class="track-browser" aria-label="Seleccion de circuito">
+        <header><span>CIRCUITOS</span><strong id="track-count">01 / 07</strong></header>
+        <div id="track-selector"></div>
+      </section>
+      <p class="footer-note">Control de estabilidad &middot; Camara dinamica &middot; Graficos de alto rendimiento</p>
     </div>
 
     <div id="hud" class="hidden">
@@ -38,33 +43,39 @@
       <div id="countdown"></div>
       <div id="message"></div>
       <canvas id="minimap" width="220" height="180"></canvas>
-      <div id="music-panel" aria-label="Reproductor del himno de carrera">
-        <div id="youtube-player"></div>
-      </div>
       <div id="effect-status"></div>
-      <div id="item-slot" class="empty">
-        <div id="item-icon">?</div>
-        <div class="item-copy"><strong id="item-name">SIN OBJETO</strong><span id="item-hint">RECOGE UNA CAJA</span></div>
+
+      <div id="item-slot" class="inventory-panel empty">
+        <span class="inventory-title">INVENTARIO</span>
+        <div class="inventory-slots">
+          <div class="inventory-cell active"><strong id="item-icon">--</strong><span id="item-name">VACIO</span></div>
+          <div class="inventory-cell"><strong id="item-icon-2">--</strong><span id="item-name-2">VACIO</span></div>
+        </div>
+        <span id="item-hint">ATRAVIESA UNA CAJA</span>
       </div>
+
       <div class="telemetry">
         <div class="gear" id="gear">N</div>
         <div class="speed"><strong id="speed">0</strong><span>KM/H</span></div>
         <div class="rpm"><i id="rpm-bar"></i></div>
         <div class="assist" id="surface">PISTA</div>
       </div>
-      <button id="audio-button" aria-label="Activar o silenciar sonido" title="Sonido (M)">●</button>
+      <button id="audio-button" aria-label="Activar o silenciar sonido" title="Sonido (M)">&#9835;</button>
     </div>
 
     <div id="finish-screen" class="screen">
       <div class="result-panel">
         <p class="eyebrow">CARRERA TERMINADA</p>
         <h2 id="result-title">Victoria</h2>
-        <div class="result-position"><strong id="final-position">1º</strong><span>POSICIÓN FINAL</span></div>
+        <div class="result-position"><strong id="final-position">1&ordm;</strong><span>POSICION FINAL</span></div>
         <div class="result-times">
           <div><span>Tiempo total</span><strong id="final-time">00:00.000</strong></div>
           <div><span>Mejor vuelta</span><strong id="final-best">00:00.000</strong></div>
         </div>
-        <button id="restart-button"><span>CORRER DE NUEVO</span><small>ENTER</small></button>
+        <div class="result-actions">
+          <button id="restart-button"><span>CORRER DE NUEVO</span><small>ENTER</small></button>
+          <button id="menu-button">CAMBIAR CIRCUITO</button>
+        </div>
       </div>
     </div>
 
