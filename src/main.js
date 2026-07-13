@@ -78,7 +78,7 @@ const grassTexture = canvasTexture(256, (ctx, s) => {
   }
 }, [22, 22]);
 
-const portraitRoadTexture = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}assets/road-portrait.jpeg`);
+const portraitRoadTexture = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}assets/road-athletic.png`);
 portraitRoadTexture.colorSpace = THREE.SRGBColorSpace;
 portraitRoadTexture.wrapS = portraitRoadTexture.wrapT = THREE.RepeatWrapping;
 portraitRoadTexture.repeat.set(1, 1);
@@ -289,9 +289,67 @@ class EngineAudio {
     for (let i=0;i<len;i++) d[i]=(Math.random()*2-1)*(1-i/len);
     const src=this.ctx.createBufferSource(), g=this.ctx.createGain(); src.buffer=b; g.gain.value=.35; src.connect(g).connect(this.master); src.start();
   }
-  toggle() { this.muted = !this.muted; ui['audio-button'].classList.toggle('muted', this.muted); }
+  toggle() { this.muted = !this.muted; ui['audio-button'].classList.toggle('muted', this.muted); return this.muted; }
 }
 const audio = new EngineAudio();
+
+class RaceMusic {
+  constructor() {
+    this.player = null;
+    this.ready = false;
+    this.pendingPlay = false;
+    this.muted = false;
+    window.onYouTubeIframeAPIReady = () => this.createPlayer();
+    const api = document.createElement('script');
+    api.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(api);
+  }
+  createPlayer() {
+    if (this.player || !window.YT?.Player) return;
+    this.player = new window.YT.Player('youtube-player', {
+      width: 320,
+      height: 200,
+      videoId: 'UYc5tQ85Ps8',
+      playerVars: { controls: 1, playsinline: 1, rel: 0, loop: 1, playlist: 'UYc5tQ85Ps8' },
+      events: {
+        onReady: event => {
+          this.ready = true;
+          event.target.setVolume(38);
+          if (this.muted) event.target.mute();
+          if (this.pendingPlay) event.target.playVideo();
+        },
+        onStateChange: event => {
+          document.getElementById('music-panel').dataset.playerState = String(event.data);
+        },
+        onAutoplayBlocked: () => {
+          document.getElementById('music-panel').dataset.autoplayBlocked = 'true';
+        }
+      }
+    });
+  }
+  play() {
+    this.pendingPlay = true;
+    document.getElementById('music-panel').dataset.autoplayBlocked = 'false';
+    if (this.ready) {
+      if (!this.muted) this.player.unMute();
+      this.player.playVideo();
+    }
+  }
+  pause() {
+    this.pendingPlay = false;
+    if (this.ready) this.player.pauseVideo();
+  }
+  setMuted(muted) {
+    this.muted = muted;
+    if (!this.ready) return;
+    if (muted) this.player.mute(); else this.player.unMute();
+  }
+}
+const raceMusic = new RaceMusic();
+
+function toggleAllAudio() {
+  raceMusic.setMuted(audio.toggle());
+}
 
 function placeCarOnTrack(car, progress, lane = 0) {
   const i = Math.floor(((progress % 1) + 1) % 1 * TRACK_SAMPLES);
@@ -310,7 +368,7 @@ function resetRace() {
 }
 
 function startRace() {
-  audio.init(); resetRace(); state = 'countdown'; countdownStart = performance.now();
+  audio.init(); raceMusic.play(); resetRace(); state = 'countdown'; countdownStart = performance.now();
   ui['start-screen'].classList.remove('active'); ui['finish-screen'].classList.remove('active'); ui.hud.classList.remove('hidden');
 }
 
@@ -420,7 +478,7 @@ function standingsPosition() {
 }
 
 function finishRace(now) {
-  state = 'finished'; finishTime = now - raceStart; speed *= .7;
+  state = 'finished'; finishTime = now - raceStart; speed *= .7; raceMusic.pause();
   const finalLap = now - lapStart; bestLap = Math.min(bestLap, finalLap);
   const pos = standingsPosition();
   ui['final-position'].textContent = `${pos}º`; ui['result-title'].textContent = pos === 1 ? 'Victoria' : pos <= 3 ? 'Podio' : 'Completado';
@@ -465,12 +523,12 @@ function animate(now = performance.now()) {
 
 ui['start-button'].addEventListener('click', startRace);
 ui['restart-button'].addEventListener('click', startRace);
-ui['audio-button'].addEventListener('click', () => audio.toggle());
+ui['audio-button'].addEventListener('click', toggleAllAudio);
 addEventListener('keydown', e => {
   keys[e.code] = true;
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
   if (e.code === 'KeyR' && state !== 'menu') resetToTrack();
-  if (e.code === 'KeyM') audio.toggle();
+  if (e.code === 'KeyM') toggleAllAudio();
   if (e.code === 'Enter' && (state === 'menu' || state === 'finished')) startRace();
 });
 addEventListener('keyup', e => keys[e.code] = false);
