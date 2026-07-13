@@ -6,6 +6,8 @@ import './style.css';
 const TOTAL_LAPS = 3;
 const ROAD_WIDTH = 15;
 const TRACK_SAMPLES = 720;
+const BARRIER_OFFSET = ROAD_WIDTH / 2 + 3.25;
+const BARRIER_DRIVE_LIMIT = BARRIER_OFFSET - 1.2;
 const UP = new THREE.Vector3(0, 1, 0);
 
 const ui = Object.fromEntries([
@@ -136,7 +138,6 @@ function addTrackMarkings() {
   const white = new THREE.MeshStandardMaterial({ color: 0xf4f1df, roughness: .75 });
   const red = new THREE.MeshStandardMaterial({ color: 0xd42b23, roughness: .7 });
   const curbGeo = new THREE.BoxGeometry(2.4, .16, .6);
-  const dashGeo = new THREE.BoxGeometry(.14, .025, 2.5);
   for (let i = 0; i < TRACK_SAMPLES; i += 8) {
     const p = centers[i], t = tangents[i], s = sides[i];
     const angle = Math.atan2(t.x, t.z);
@@ -145,11 +146,6 @@ function addTrackMarkings() {
       curb.position.copy(p).addScaledVector(s, sign * (ROAD_WIDTH / 2 + .1));
       curb.position.y += .14; curb.rotation.y = angle; curb.castShadow = curb.receiveShadow = true; scene.add(curb);
     }
-  }
-  for (let i = 0; i < TRACK_SAMPLES; i += 22) {
-    const p = centers[i], t = tangents[i];
-    const dash = new THREE.Mesh(dashGeo, white);
-    dash.position.copy(p); dash.position.y += .095; dash.rotation.y = Math.atan2(t.x, t.z); scene.add(dash);
   }
 }
 addTrackMarkings();
@@ -239,20 +235,28 @@ function addEnvironment() {
 
   const concrete = new THREE.MeshStandardMaterial({ color: 0xb7b9b5, roughness: .88 });
   const seat = new THREE.MeshStandardMaterial({ color: 0x314457, roughness: .8 });
-  for (const [x, z, rot] of [[-85,-155,.15], [110,115,2.7]]) {
+  for (const [trackIndex, sign] of [[105, 1], [405, -1]]) {
+    const p = centers[trackIndex], t = tangents[trackIndex], s = sides[trackIndex];
     const stand = new THREE.Group();
     for (let j = 0; j < 5; j++) { const row = new THREE.Mesh(new THREE.BoxGeometry(28, .5, 2), j % 2 ? seat : concrete); row.position.set(0, j*.65, j*1.55); stand.add(row); }
-    stand.position.set(x, .2, z); stand.rotation.y = rot; scene.add(stand);
+    stand.position.copy(p).addScaledVector(s, sign * 30); stand.position.y += .2;
+    stand.rotation.y = Math.atan2(-t.z, t.x) + (sign < 0 ? Math.PI : 0); scene.add(stand);
   }
 
   const barrierMat = new THREE.MeshStandardMaterial({ color: 0xd5d8d8, metalness: .55, roughness: .45 });
-  const postGeo = new THREE.BoxGeometry(.12, 1.1, .12), railGeo = new THREE.BoxGeometry(2.8, .16, .12);
-  for (let i = 0; i < TRACK_SAMPLES; i += 9) for (const sign of [-1, 1]) {
-    const p = centers[i], t = tangents[i], s = sides[i];
-    const group = new THREE.Group();
-    const post = new THREE.Mesh(postGeo, barrierMat); post.position.y = .55; group.add(post);
-    for (const y of [.42,.75]) { const rail = new THREE.Mesh(railGeo, barrierMat); rail.position.set(0,y,0); rail.rotation.y = Math.PI/2; group.add(rail); }
-    group.position.copy(p).addScaledVector(s, sign*(ROAD_WIDTH/2+3.25)); group.rotation.y = Math.atan2(t.x,t.z); scene.add(group);
+  const postGeo = new THREE.BoxGeometry(.14, 1.15, .14);
+  for (const sign of [-1, 1]) {
+    for (const railHeight of [.38, .68, .98]) {
+      const railPoints = centers.map((p, i) => p.clone().addScaledVector(sides[i], sign * BARRIER_OFFSET).add(new THREE.Vector3(0, railHeight, 0)));
+      const railCurve = new THREE.CatmullRomCurve3(railPoints, true, 'centripetal', .45);
+      const rail = new THREE.Mesh(new THREE.TubeGeometry(railCurve, TRACK_SAMPLES, .09, 6, true), barrierMat);
+      rail.castShadow = rail.receiveShadow = true; scene.add(rail);
+    }
+    for (let i = 0; i < TRACK_SAMPLES; i += 8) {
+      const post = new THREE.Mesh(postGeo, barrierMat);
+      post.position.copy(centers[i]).addScaledVector(sides[i], sign * BARRIER_OFFSET);
+      post.position.y += .57; post.castShadow = true; scene.add(post);
+    }
   }
 }
 addEnvironment();
@@ -355,10 +359,11 @@ function updatePlayer(dt, now) {
   player.position.y = THREE.MathUtils.lerp(player.position.y, centers[playerIndex].y + .14, .12);
   player.userData.wheels.forEach(w => w.rotation.x -= speed * dt / .42);
 
-  if (centerDistance > ROAD_WIDTH / 2 + 5.2) {
-    const push = centers[playerIndex].clone().sub(player.position).setY(0).normalize();
-    player.position.addScaledVector(push, Math.min(12*dt, centerDistance - ROAD_WIDTH/2 - 5.1));
-    if (Math.abs(speed) > 14) { speed *= .72; cameraShake = .32; audio.hit(); }
+  const lateralOffset = player.position.clone().sub(centers[playerIndex]).dot(sides[playerIndex]);
+  if (Math.abs(lateralOffset) > BARRIER_DRIVE_LIMIT) {
+    const penetration = Math.abs(lateralOffset) - BARRIER_DRIVE_LIMIT;
+    player.position.addScaledVector(sides[playerIndex], -Math.sign(lateralOffset) * penetration);
+    if (Math.abs(speed) > 8) { speed *= .55; cameraShake = .36; audio.hit(); }
   }
 
   for (const rival of rivals) {
@@ -447,11 +452,11 @@ function animate(now = performance.now()) {
   const dt = Math.min(.033, (now - (animate.last || now)) / 1000); animate.last = now;
   if (state === 'menu') {
     const p=centers[TRACK_SAMPLES-2], t=tangents[TRACK_SAMPLES-2]; camera.position.lerp(p.clone().add(new THREE.Vector3(15,5,13)),.03); camera.lookAt(p.clone().addScaledVector(t,5));
-    updateRivals(dt*.2);
   } else {
-    if (state === 'countdown' || (state === 'racing' && now - countdownStart < 3800)) updateCountdown(now);
+    if (state === 'countdown' || (state === 'racing' && ui.countdown.textContent)) updateCountdown(now);
     if (state === 'racing' || state === 'finished') updatePlayer(dt,now);
-    updateRivals(dt); updateCamera(dt); drawMinimap();
+    if (state === 'racing' || state === 'finished') updateRivals(dt);
+    updateCamera(dt); drawMinimap();
     if (state === 'racing') { ui['race-time'].textContent=formatTime(now-raceStart); ui.position.textContent=standingsPosition(); }
     if (messageTimer && now > messageTimer) { ui.message.textContent=''; messageTimer=0; }
   }
